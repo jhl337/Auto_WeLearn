@@ -1,0 +1,64 @@
+# Python 字节码
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Python 版本管理
+.python-version
+
+# 编辑器和IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 项目特定文件
+accounts.txt
+*.log
+
+# 测试和覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# 分发和打包
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# UV 和依赖锁文件（可选：如果团队协作需要可以取消注释）
+# uv.lock
+
+# 备份文件
+*.bak
+*.old
+*_old.py
+
+# 临时文件
+*.tmp
+temp/
+tmp/
+
+# Windows 特定
+Thumbs.db
+desktop.ini
+
+# macOS 特定
+.DS_Store
+.AppleDouble
+.LSOverride
