@@ -6,11 +6,56 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
     QListWidget, QListWidgetItem, QLabel, QTextEdit, QMessageBox,
-    QComboBox, QSpinBox, QSplitter, QWidget, QProgressBar
+    QComboBox, QSpinBox, QSplitter, QWidget, QProgressBar,
+    QDialogButtonBox, QGridLayout
 )
+from PyQt5.QtGui import QFontDatabase
 from core.api import WeLearnClient
 from core.account_manager import Account
 from ui.workers import LoginThread, CourseThread, UnitsThread, TimeStudyThread, StudyThread
+
+
+class AccuracyRangeDialog(QDialog):
+    """随机正确率范围设置对话框"""
+
+    def __init__(self, min_value=70, max_value=100, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("设置随机正确率")
+        self.setModal(True)
+
+        layout = QVBoxLayout(self)
+        input_layout = QGridLayout()
+
+        input_layout.addWidget(QLabel("最小正确率:"), 0, 0)
+        self.min_accuracy = QSpinBox()
+        self.min_accuracy.setRange(0, 100)
+        self.min_accuracy.setValue(min_value)
+        self.min_accuracy.setSuffix("%")
+        input_layout.addWidget(self.min_accuracy, 0, 1)
+
+        input_layout.addWidget(QLabel("最大正确率:"), 1, 0)
+        self.max_accuracy = QSpinBox()
+        self.max_accuracy.setRange(0, 100)
+        self.max_accuracy.setValue(max_value)
+        self.max_accuracy.setSuffix("%")
+        input_layout.addWidget(self.max_accuracy, 1, 1)
+
+        self.max_accuracy.setMinimum(self.min_accuracy.value())
+        self.min_accuracy.valueChanged.connect(self.max_accuracy.setMinimum)
+        self.max_accuracy.valueChanged.connect(self.min_accuracy.setMaximum)
+
+        layout.addLayout(input_layout)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def get_values(self):
+        return self.min_accuracy.value(), self.max_accuracy.value()
 
 
 class AccountDetailDialog(QDialog):
@@ -56,7 +101,7 @@ class AccountDetailDialog(QDialog):
         info_layout.addWidget(self.status_label)
         info_layout.addStretch()
         
-        self.login_btn = QPushButton("🔐 登录")
+        self.login_btn = QPushButton("登录")
         self.login_btn.clicked.connect(self.do_login)
         info_layout.addWidget(self.login_btn)
         
@@ -134,12 +179,29 @@ class AccountDetailDialog(QDialog):
         self.homework_widget = QWidget()
         homework_layout = QHBoxLayout(self.homework_widget)
         homework_layout.setContentsMargins(0, 0, 0, 0)
-        homework_layout.addWidget(QLabel("正确率:"))
-        self.accuracy_spin = QSpinBox()
-        self.accuracy_spin.setRange(0, 100)
-        self.accuracy_spin.setValue(100)
-        self.accuracy_spin.setSuffix("%")
-        homework_layout.addWidget(self.accuracy_spin)
+        homework_layout.addWidget(QLabel("正确率设置:"))
+        self.accuracy_mode_combo = QComboBox()
+        self.accuracy_mode_combo.addItems(["固定正确率", "随机正确率"])
+        self.accuracy_mode_combo.currentTextChanged.connect(
+            self.on_accuracy_mode_changed
+        )
+        homework_layout.addWidget(self.accuracy_mode_combo)
+
+        self.fixed_accuracy_spin = QSpinBox()
+        self.fixed_accuracy_spin.setRange(0, 100)
+        self.fixed_accuracy_spin.setValue(100)
+        self.fixed_accuracy_spin.setSuffix("%")
+        homework_layout.addWidget(self.fixed_accuracy_spin)
+
+        self.random_accuracy_range = (70, 100)
+        self.random_accuracy_btn = QPushButton("设置随机范围")
+        self.random_accuracy_btn.clicked.connect(self.set_random_accuracy)
+        self.random_accuracy_btn.hide()
+        homework_layout.addWidget(self.random_accuracy_btn)
+
+        self.random_accuracy_label = QLabel("70%-100%")
+        self.random_accuracy_label.hide()
+        homework_layout.addWidget(self.random_accuracy_label)
         homework_layout.addStretch()
         settings_layout.addWidget(self.homework_widget)
         
@@ -185,10 +247,10 @@ class AccountDetailDialog(QDialog):
         
         # 控制按钮
         control_layout = QHBoxLayout()
-        self.start_btn = QPushButton("▶️ 开始刷作业")
+        self.start_btn = QPushButton("开始刷作业")
         self.start_btn.setEnabled(False)
         self.start_btn.clicked.connect(self.start_study)
-        self.stop_btn = QPushButton("⏹️ 停止")
+        self.stop_btn = QPushButton("停止")
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop_study)
         control_layout.addWidget(self.start_btn)
@@ -212,7 +274,14 @@ class AccountDetailDialog(QDialog):
         
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setStyleSheet("font-family: Consolas, monospace; font-size: 12px;")
+        log_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        available_fonts = set(QFontDatabase().families())
+        for family in ("Menlo", "Monaco", "Consolas", "Courier New"):
+            if family in available_fonts:
+                log_font.setFamily(family)
+                break
+        log_font.setPointSize(12)
+        self.log_text.setFont(log_font)
         log_layout.addWidget(self.log_text)
         
         clear_log_btn = QPushButton("清空日志")
@@ -256,16 +325,16 @@ class AccountDetailDialog(QDialog):
         
         if success:
             self.is_logged_in = True
-            self.login_btn.setText("✅ 已登录")
+            self.login_btn.setText("已登录")
             self.login_btn.setEnabled(False)
             self.refresh_courses_btn.setEnabled(True)
-            self.log(f"✅ 登录成功")
+            self.log("登录成功")
             self.update_status("已登录")
             # 自动刷新课程
             self.refresh_courses()
         else:
-            self.login_btn.setText("🔐 登录")
-            self.log(f"❌ 登录失败: {message}")
+            self.login_btn.setText("登录")
+            self.log(f"登录失败: {message}")
             self.update_status("登录失败", message)
             QMessageBox.warning(self, "登录失败", message)
     
@@ -291,9 +360,9 @@ class AccountDetailDialog(QDialog):
                 item = QListWidgetItem(f"{course['name']} (进度: {course['per']}%)")
                 item.setData(Qt.ItemDataRole.UserRole, course)
                 self.courses_list.addItem(item)
-            self.log(f"✅ 获取到 {len(courses)} 门课程")
+            self.log(f"获取到 {len(courses)} 门课程")
         else:
-            self.log(f"❌ 获取课程失败: {message}")
+            self.log(f"获取课程失败: {message}")
             QMessageBox.warning(self, "失败", message)
     
     def on_course_selected(self, item: QListWidgetItem):
@@ -337,9 +406,9 @@ class AccountDetailDialog(QDialog):
                 self.unit_list.addItem(item)
             
             self.start_btn.setEnabled(True)
-            self.log(f"✅ 获取到 {len(self.current_units)} 个单元")
+            self.log(f"获取到 {len(self.current_units)} 个单元")
         else:
-            self.log(f"❌ 获取单元失败: {message}")
+            self.log(f"获取单元失败: {message}")
     
     def select_all_units(self):
         """全选单元"""
@@ -356,12 +425,34 @@ class AccountDetailDialog(QDialog):
         if mode == "刷作业":
             self.homework_widget.show()
             self.time_widget.hide()
-            self.start_btn.setText("▶️ 开始刷作业")
+            self.start_btn.setText("开始刷作业")
         else:
             self.homework_widget.hide()
             self.time_widget.show()
-            self.start_btn.setText("▶️ 开始刷时长")
-    
+            self.start_btn.setText("开始刷时长")
+
+    def on_accuracy_mode_changed(self, mode: str):
+        """切换固定正确率和随机正确率设置"""
+        is_random = mode == "随机正确率"
+        self.fixed_accuracy_spin.setVisible(not is_random)
+        self.random_accuracy_btn.setVisible(is_random)
+        self.random_accuracy_label.setVisible(is_random)
+
+    def set_random_accuracy(self):
+        """打开随机正确率设置对话框"""
+        min_value, max_value = self.random_accuracy_range
+        dialog = AccuracyRangeDialog(min_value, max_value, self)
+        if dialog.exec_() == QDialog.DialogCode.Accepted:
+            self.random_accuracy_range = dialog.get_values()
+            min_value, max_value = self.random_accuracy_range
+            self.random_accuracy_label.setText(f"{min_value}%-{max_value}%")
+
+    def get_accuracy_config(self):
+        """返回刷作业线程使用的正确率配置"""
+        if self.accuracy_mode_combo.currentText() == "固定正确率":
+            return self.fixed_accuracy_spin.value()
+        return self.random_accuracy_range
+
     def start_study(self):
         """开始任务"""
         if not self.current_course:
@@ -387,7 +478,7 @@ class AccountDetailDialog(QDialog):
         self.progress_bar.setRange(0, 0)  # 不确定进度
         
         if mode == "刷作业":
-            accuracy_config = self.accuracy_spin.value()
+            accuracy_config = self.get_accuracy_config()
             self.log(f"开始刷作业 (已选 {len(units_to_process)} 个单元)...")
             self.update_status("运行中")
             
@@ -434,7 +525,7 @@ class AccountDetailDialog(QDialog):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.progress_bar.setVisible(False)
-        self.log("⏹️ 任务已停止")
+        self.log("任务已停止")
         self.update_status("已停止")
     
     def on_progress_update(self, status: str, message: str):
@@ -452,9 +543,9 @@ class AccountDetailDialog(QDialog):
         if mode == "刷作业":
             msg = f"步骤1成功: {result.get('way1_succeed', 0)}, 失败: {result.get('way1_failed', 0)}\n"
             msg += f"步骤2成功: {result.get('way2_succeed', 0)}, 失败: {result.get('way2_failed', 0)}"
-            self.log(f"✅ 刷作业完成！\n{msg}")
+            self.log(f"刷作业完成！\n{msg}")
         else:
-            self.log("✅ 刷时长完成！")
+            self.log("刷时长完成！")
         
         self.update_status("已完成")
         QMessageBox.information(self, "完成", "任务已完成！")
