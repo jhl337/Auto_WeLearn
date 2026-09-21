@@ -82,8 +82,8 @@ class AccountView(QWidget):
         # ========== 工具栏 ==========
         toolbar_layout = QHBoxLayout()
         
-        self.add_btn = QPushButton("➕ 添加账号")
-        self.delete_btn = QPushButton("🗑️ 删除选中")
+        self.add_btn = QPushButton("添加账号")
+        self.delete_btn = QPushButton("删除选中")
         
         self.add_btn.clicked.connect(self.add_account)
         self.delete_btn.clicked.connect(self.delete_selected)
